@@ -22,7 +22,18 @@
         '20260329': 'Final Four', '20260330': 'Final Four',
         '20260406': 'Championship'
     };
-    const CDT_TIMEZONE = 'America/Chicago';
+    const USER_TIMEZONE = (() => {
+        try { return Intl.DateTimeFormat().resolvedOptions().timeZone || 'America/Chicago'; }
+        catch { return 'America/Chicago'; }
+    })();
+
+    function getTimezoneAbbr() {
+        // Extract short timezone abbreviation like "CDT", "EST", "PST"
+        const parts = new Intl.DateTimeFormat('en-US', { timeZone: USER_TIMEZONE, timeZoneName: 'short' }).formatToParts(new Date());
+        const tzPart = parts.find(p => p.type === 'timeZoneName');
+        return tzPart ? tzPart.value : '';
+    }
+
     const POLL_INTERVAL_LIVE = 15000;   // 15 seconds during live games
     const POLL_INTERVAL_IDLE = 120000;  // 2 minutes when no live games
 
@@ -52,18 +63,18 @@
     const refreshCountdown = $('refresh-countdown');
 
     // --- Timezone Utilities ---
-    function formatTimeCDT(isoStr) {
+    function formatTimeLocal(isoStr) {
+        const tzAbbr = getTimezoneAbbr();
         return new Date(isoStr).toLocaleTimeString('en-US', {
             hour: 'numeric', minute: '2-digit', hour12: true,
-            timeZone: CDT_TIMEZONE
-        }) + ' CDT';
+            timeZone: USER_TIMEZONE
+        }) + (tzAbbr ? ` ${tzAbbr}` : '');
     }
 
     function getTodayStr() {
         const now = new Date();
-        // Use CDT for "today" determination
-        const cdtStr = now.toLocaleDateString('en-CA', { timeZone: CDT_TIMEZONE });
-        return cdtStr.replace(/-/g, '');
+        const localStr = now.toLocaleDateString('en-CA', { timeZone: USER_TIMEZONE });
+        return localStr.replace(/-/g, '');
     }
 
     function formatDate(dateStr) {
@@ -74,11 +85,12 @@
         return date.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
     }
 
-    function currentTimeCDT() {
+    function currentTimeLocal() {
+        const tzAbbr = getTimezoneAbbr();
         return new Date().toLocaleTimeString('en-US', {
             hour: 'numeric', minute: '2-digit', second: '2-digit', hour12: true,
-            timeZone: CDT_TIMEZONE
-        });
+            timeZone: USER_TIMEZONE
+        }) + (tzAbbr ? ` ${tzAbbr}` : '');
     }
 
     function fallbackImg() {
@@ -299,7 +311,7 @@
         } else {
             statusHTML = `<span class="mdc-game-card__status">
                 <span class="material-icons-outlined" style="font-size:14px">schedule</span>
-                ${formatTimeCDT(game.date)}
+                ${formatTimeLocal(game.date)}
             </span>`;
         }
 
@@ -417,7 +429,7 @@
             if (bothTeamsTBD || broadcastTBD) {
                 statusText = 'TBD';
             } else {
-                statusText = formatTimeCDT(game.date);
+                statusText = formatTimeLocal(game.date);
             }
         }
 
@@ -512,7 +524,7 @@
             // Filter out First Four / play-in games
             const FIRST_FOUR_DATES = ['20260317', '20260318'];
             const bracketGames = allGames.filter(g => {
-                const dateStr = new Date(g.date).toLocaleDateString('en-CA', { timeZone: CDT_TIMEZONE }).replace(/-/g, '');
+                const dateStr = new Date(g.date).toLocaleDateString('en-CA', { timeZone: USER_TIMEZONE }).replace(/-/g, '');
                 return !FIRST_FOUR_DATES.includes(dateStr);
             });
 
@@ -686,8 +698,8 @@
                 <div class="modal-section-title"><span class="material-icons-outlined">info</span> Game Info</div>
                 <div class="modal-detail-grid">
                     <div class="modal-detail-item">
-                        <div class="modal-detail-label">Time (CDT)</div>
-                        <div class="modal-detail-value"><span class="material-icons-outlined">schedule</span>${game.statusDetail || formatTimeCDT(game.date)}</div>
+                        <div class="modal-detail-label">Time</div>
+                        <div class="modal-detail-value"><span class="material-icons-outlined">schedule</span>${game.statusDetail || formatTimeLocal(game.date)}</div>
                     </div>
                     <div class="modal-detail-item">
                         <div class="modal-detail-label">TV</div>
@@ -815,7 +827,7 @@
             if (!silent) loadingContainer.style.display = 'none';
             renderStats();
             updateView();
-            lastUpdatedEl.textContent = `Updated ${currentTimeCDT()} CDT`;
+            lastUpdatedEl.textContent = `Updated ${currentTimeLocal()}`;
 
             // Restart polling with potentially new interval
             startPolling();
