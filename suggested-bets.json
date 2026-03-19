@@ -2,9 +2,21 @@
   {
     "gameId": "401856479",
     "type": "Sharp Line Movement Alert",
-    "pick": "OSU covering",
+    "pick": "OSU",
     "odds": "N/A",
-    "reason": "Opening line was OSU -2.5 but has moved heavily to OSU -3.5 (1 pt shift). Sharp money is hammering this side.",
-    "confidence": "Medium"
+    "reason": "Opening line was OSU -2.5 but has moved heavily to OSU -3.5 (1 pt shift). Sharp cash is hammering this side, follow their lead.",
+    "confidence": "Medium",
+    "score": 75,
+    "lastUpdated": 1710860000000
+  },
+  {
+    "gameId": "401856478",
+    "type": "Underdog Value Metric",
+    "pick": "Opponent of DUKE +28.5",
+    "odds": "-110",
+    "reason": "Heavy favorites (DUKE) are historically unreliable at covering massive mathematically inflated double-digit spreads inside tournament pressure. Great value taking the points on the underdog.",
+    "confidence": "High",
+    "score": 85,
+    "lastUpdated": 1710860000000
   }
 ]

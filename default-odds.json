@@ -11,12 +11,6 @@
     "prediction": "OSU -2.5",
     "predReason": "Favored by 2.5 pts"
   },
-  "401856480": {
-    "spread": "WIS -10.5",
-    "overUnder": "O/U 162.5",
-    "prediction": "WIS -10.5",
-    "predReason": "Favored by 10.5 pts"
-  },
   "401856481": {
     "spread": "ARK -14.5",
     "overUnder": "O/U 158.5",
@@ -43,7 +37,7 @@
   },
   "401856485": {
     "spread": "GONZ -20.5",
-    "overUnder": "O/U 151.5",
+    "overUnder": "O/U 152.5",
     "prediction": "GONZ -20.5",
     "predReason": "Favored by 20.5 pts"
   },
@@ -68,7 +62,7 @@
   "401856489": {
     "spread": "NEB -13.5",
     "overUnder": "O/U 137.5",
-    "prediction": "TROY +13.5",
+    "prediction": "NEB -13.5",
     "predReason": "Favored by 13.5 pts"
   },
   "401856490": {
@@ -94,101 +88,5 @@
     "overUnder": "O/U 137.5",
     "prediction": "HOU -23.5",
     "predReason": "Favored by 23.5 pts"
-  },
-  "401856494": {
-    "spread": "SJU -9.5",
-    "overUnder": "O/U 131.5",
-    "prediction": "SJU -9.5",
-    "predReason": "Favored by 9.5 pts"
-  },
-  "401856495": {
-    "spread": "KU -14.5",
-    "overUnder": "O/U 138.5",
-    "prediction": "KU -14.5",
-    "predReason": "Favored by 14.5 pts"
-  },
-  "401856496": {
-    "spread": "UCLA -5.5",
-    "overUnder": "O/U 152.5",
-    "prediction": "UCLA -5.5",
-    "predReason": "Favored by 5.5 pts"
-  },
-  "401856497": {
-    "spread": "CONN -20.5",
-    "overUnder": "O/U 136.5",
-    "prediction": "CONN -20.5",
-    "predReason": "Favored by 20.5 pts"
-  },
-  "401856518": {
-    "spread": "MIA -2.5",
-    "overUnder": "O/U 146.5",
-    "prediction": "MIA -2.5",
-    "predReason": "Favored by 2.5 pts"
-  },
-  "401856519": {
-    "spread": "PUR -25.5",
-    "overUnder": "O/U 163.5",
-    "prediction": "PUR -25.5",
-    "predReason": "Favored by 25.5 pts"
-  },
-  "401856520": {
-    "spread": "TTU -7.5",
-    "overUnder": "O/U 155.5",
-    "prediction": "TTU -7.5",
-    "predReason": "Favored by 7.5 pts"
-  },
-  "401856521": {
-    "spread": "ALA -11.5",
-    "overUnder": "O/U 159.5",
-    "prediction": "ALA -11.5",
-    "predReason": "Favored by 11.5 pts"
-  },
-  "401856522": {
-    "spread": "IOWA -2.5",
-    "overUnder": "O/U 128.5",
-    "prediction": "IOWA -2.5",
-    "predReason": "Favored by 2.5 pts"
-  },
-  "401856523": {
-    "spread": "FLA -35.5",
-    "overUnder": "O/U 155.5",
-    "prediction": "FLA -35.5",
-    "predReason": "Favored by 35.5 pts"
-  },
-  "401856524": {
-    "spread": "ISU -24.5",
-    "overUnder": "O/U 149.5",
-    "prediction": "ISU -24.5",
-    "predReason": "Favored by 24.5 pts"
-  },
-  "401856525": {
-    "spread": "UK -3.5",
-    "overUnder": "O/U 160.5",
-    "prediction": "UK -3.5",
-    "predReason": "Favored by 3.5 pts"
-  },
-  "401856526": {
-    "spread": "UVA -18.5",
-    "overUnder": "O/U 145.5",
-    "prediction": "UVA -18.5",
-    "predReason": "Favored by 18.5 pts"
-  },
-  "401856527": {
-    "spread": "TENN -11.5",
-    "overUnder": "O/U 149.5",
-    "prediction": "TENN -11.5",
-    "predReason": "Favored by 11.5 pts"
-  },
-  "401856528": {
-    "spread": "USU -1.5",
-    "overUnder": "O/U 146.5",
-    "prediction": "USU -1.5",
-    "predReason": "Favored by 1.5 pts"
-  },
-  "401856529": {
-    "spread": "ARIZ -30.5",
-    "overUnder": "O/U 150.5",
-    "prediction": "ARIZ -30.5",
-    "predReason": "Favored by 30.5 pts"
   }
 }
