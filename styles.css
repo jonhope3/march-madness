@@ -553,8 +553,14 @@ body {
 
 
 
-.mdc-game-card--final { opacity: 0.8; }
-.mdc-game-card--final:hover { opacity: 1; }
+.mdc-game-card--final { 
+    opacity: 0.65; 
+    filter: grayscale(0.5);
+}
+.mdc-game-card--final:hover { 
+    opacity: 0.95; 
+    filter: grayscale(0);
+}
 
 @keyframes card-enter {
     from { opacity: 0; transform: translateY(12px); }
@@ -853,6 +859,72 @@ body {
 .bracket-team {
     display: flex;
     align-items: center;
+    padding: 6px 12px;
+    gap: 12px;
+    min-height: 48px;
+}
+
+.bracket-connector {
+    width: 32px;
+    min-width: 32px;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-around;
+}
+
+.bracket-connector-pair {
+    height: 50%;
+    border-right: 2px solid var(--md-outline-variant);
+    position: relative;
+}
+
+.bracket-connector-pair::after {
+    content: '';
+    position: absolute;
+    right: -2px;
+    top: 50%;
+    width: 16px;
+    border-top: 2px solid var(--md-outline-variant);
+}
+
+.bracket-champion {
+    background: var(--md-primary-container);
+    color: var(--md-on-primary-container);
+    border-radius: var(--md-shape-lg);
+    padding: 16px 24px;
+    text-align: center;
+    box-shadow: var(--md-elevation-3);
+    border: 2px solid var(--md-primary);
+}
+
+.bracket-round-label {
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 1.5px;
+    text-transform: uppercase;
+    color: var(--md-on-surface-variant);
+    text-align: center;
+    padding: 4px 0 8px;
+    flex-shrink: 0;
+}
+
+.bracket-matchup {
+    background: var(--md-surface);
+    border-radius: var(--md-shape-sm);
+    box-shadow: var(--md-elevation-1);
+    margin: 4px 0;
+    cursor: pointer;
+    transition: box-shadow var(--md-motion-standard), transform var(--md-motion-standard);
+    position: relative;
+    overflow: hidden;
+    flex-shrink: 0;
+}
+
+.bracket-matchup:hover { box-shadow: var(--md-elevation-2); transform: scale(1.02); z-index: 5; }
+
+.bracket-team {
+    display: flex;
+    align-items: center;
     gap: 6px;
     padding: 6px 10px;
     font-size: 12px;
@@ -898,6 +970,56 @@ body {
 .bracket-team--winner .bracket-team-name,
 .bracket-team--winner .bracket-team-score { color: var(--accent-green); font-weight: 700; }
 .bracket-team--loser { opacity: 0.5; }
+
+.mdc-bet-filters {
+    display: flex;
+    justify-content: flex-start;
+    gap: 8px;
+    padding: 8px 16px;
+    margin: 0 auto 24px;
+    max-width: 1400px;
+    overflow-x: auto;
+    scrollbar-width: none; /* Hide scrollbar Firefox */
+    -ms-overflow-style: none;  /* Hide scrollbar IE/Edge */
+}
+.mdc-bet-filters::-webkit-scrollbar {
+    display: none; /* Hide scrollbar Chrome/Safari */
+}
+
+.mdc-bet-filter-chip {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 16px;
+    border-radius: 12px;
+    border: 1px solid rgba(255,255,255,0.1);
+    font-size: 13px;
+    font-weight: 700;
+    white-space: nowrap;
+    cursor: pointer;
+    transition: all 0.15s cubic-bezier(0, 0, 0.2, 1);
+    box-shadow: none;
+    line-height: 1;
+}
+
+.mdc-bet-filter-chip__icon {
+    font-size: 18px;
+    margin-left: -4px;
+}
+
+.mdc-bet-filter-chip--active {
+    box-shadow: 
+        0 4px 6px -1px rgba(0,0,0,0.2),
+        0 2px 4px -1px rgba(0,0,0,0.1);
+    transform: translateY(-1px);
+    border: none;
+    font-weight: 800;
+}
+
+.mdc-bet-filter-chip:hover:not(.mdc-bet-filter-chip--active) {
+    box-shadow: 0 1px 3px rgba(0,0,0,0.2);
+}
+
 
 .bracket-matchup-status {
     font-size: 9px;

@@ -38,9 +38,10 @@
     const POLL_INTERVAL_IDLE = 120000;  // 2 minutes when no live games
 
     // --- State ---
-    let currentDate = '';
-    let currentFilter = 'all';
-    let currentView = 'cards'; // 'cards' or 'bracket'
+    let currentDate = '20260319';
+    let currentFilter = 'all'; // all, live, upcoming, completed
+    let currentView = 'cards'; // cards, bracket, bets
+    let currentBetTypeFilter = 'all'; // all, Sharp Money, Value Play, Coin-flip, etc'
     let allEvents = [];
     let isLoading = false;
     let pollTimer = null;
@@ -66,11 +67,17 @@
 
     // --- Timezone Utilities ---
     function formatTimeLocal(isoStr) {
+        if (!isoStr) return '';
+        const date = new Date(isoStr);
         const tzAbbr = getTimezoneAbbr();
-        return new Date(isoStr).toLocaleTimeString('en-US', {
+        const datePart = date.toLocaleDateString('en-US', { 
+            month: 'short', day: 'numeric', timeZone: USER_TIMEZONE 
+        });
+        const timePart = date.toLocaleTimeString('en-US', {
             hour: 'numeric', minute: '2-digit', hour12: true,
             timeZone: USER_TIMEZONE
-        }) + (tzAbbr ? ` ${tzAbbr}` : '');
+        });
+        return `${datePart}, ${timePart}${tzAbbr ? ` ${tzAbbr}` : ''}`;
     }
 
     function getTodayStr() {
@@ -125,14 +132,8 @@
         const hasLive = allEvents.some(g => g.state === 'in');
         const interval = hasLive ? POLL_INTERVAL_LIVE : POLL_INTERVAL_IDLE;
 
-        if (hasLive) {
-            liveBar.style.display = 'flex';
-            nextPollTime = Date.now() + interval;
-            updateCountdown();
-            countdownTimer = setInterval(updateCountdown, 1000);
-        } else {
-            liveBar.style.display = 'none';
-        }
+        nextPollTime = Date.now() + interval;
+        updateNextUpdateLabel();
 
         pollTimer = setTimeout(async () => {
             await loadData(true); // silent reload
@@ -142,12 +143,16 @@
 
     function stopPolling() {
         if (pollTimer) { clearTimeout(pollTimer); pollTimer = null; }
-        if (countdownTimer) { clearInterval(countdownTimer); countdownTimer = null; }
     }
 
-    function updateCountdown() {
-        const remaining = Math.max(0, Math.ceil((nextPollTime - Date.now()) / 1000));
-        refreshCountdown.textContent = `Next update in ${remaining}s`;
+    function updateNextUpdateLabel() {
+        // Formats the future target time for the next data drop
+        const target = new Date(nextPollTime).toLocaleTimeString('en-US', {
+            hour: 'numeric', minute: '2-digit', second: '2-digit', hour12: true,
+            timeZone: USER_TIMEZONE
+        });
+        const tz = getTimezoneAbbr();
+        lastUpdatedEl.textContent = `Next update: ${target}${tz ? ` ${tz}` : ''}`;
     }
 
     // --- Fetch ---
@@ -279,7 +284,7 @@
         return {
             id: ev.id, date: ev.date, name: ev.name,
             state: sType.state || 'pre',
-            statusDetail: sType.detail || sType.shortDetail || '',
+            statusDetail: sType.state === 'pre' ? formatTimeLocal(ev.date) : (sType.detail || sType.shortDetail || ''),
             completed: sType.completed || false,
             clock: st.displayClock, period: st.period,
             city: venue.address ? `${venue.address.city}, ${venue.address.state}` : '',
@@ -521,27 +526,40 @@
         </div>`;
     }
 
-    const SEED_ORDER_R64 = [
-        [1, 16], [8, 9], [5, 12], [4, 13],
-        [6, 11], [3, 14], [7, 10], [2, 15]
-    ];
-
     function getMatchupSortKey(game) {
-        const s1 = game.away?.seed || 99;
-        const s2 = game.home?.seed || 99;
-        const topSeed = Math.min(s1, s2);
-        const idx = SEED_ORDER_R64.findIndex(pair => pair[0] === topSeed);
-        return idx >= 0 ? idx : 99;
+        if (!game) return 99;
+        const sAway = parseInt(game.away?.seed || 99);
+        const sHome = parseInt(game.home?.seed || 99);
+        const s = Math.min(sAway, sHome);
+
+        // Standard hierarchies (Root Seed Order)
+        const round1Order = [1, 8, 5, 4, 6, 3, 7, 2];
+
+        // R64 check
+        if (!game.round || game.round === '1st Round') {
+            const idx = round1Order.indexOf(s);
+            return idx >= 0 ? idx : 99;
+        }
+
+        // R32 check (Winner of 1/16 and 8/9 meet in Slot 0, 5/12 and 4/13 in Slot 1, etc.)
+        const r2Pairs = [[1,16,8,9], [5,12,4,13], [6,11,3,14], [7,10,2,15]];
+        if (game.round === '2nd Round') {
+            const pairIdx = r2Pairs.findIndex(p => p.includes(sAway) || p.includes(sHome));
+            return pairIdx >= 0 ? pairIdx : 99;
+        }
+
+        // Sweet 16 (Winner of Slot 0/1 from R32 meet)
+        const s16Groups = [[1,16,8,9,5,12,4,13], [6,11,3,14,7,10,2,15]];
+        if (game.round === 'Sweet 16') {
+            const grpIdx = s16Groups.findIndex(g => g.includes(sAway) || g.includes(sHome));
+            return grpIdx >= 0 ? grpIdx : 99;
+        }
+
+        return 0; // Elite 8 is only 1 game per region
     }
 
-    function renderBracketRegion(regionName, games) {
+    function renderBracketRegion(regionName, regionMap) {
         const roundNames = ['1st Round', '2nd Round', 'Sweet 16', 'Elite 8'];
-        const roundGames = {};
-        roundNames.forEach(r => roundGames[r] = []);
-        games.forEach(g => { const r = g.round || '1st Round'; if (roundGames[r]) roundGames[r].push(g); });
-        roundGames['1st Round'].sort((a, b) => getMatchupSortKey(a) - getMatchupSortKey(b));
-
-        const r64Count = Math.max(roundGames['1st Round'].length, 8);
         const regionDiv = document.createElement('div');
         regionDiv.className = 'bracket-region';
         regionDiv.innerHTML = `<div class="bracket-region__title-wrap"><span class="bracket-region__title">${regionName} Region</span></div>`;
@@ -550,8 +568,8 @@
         tree.className = 'bracket-tree';
 
         roundNames.forEach((roundName, roundIdx) => {
-            const expectedCount = Math.max(1, r64Count / Math.pow(2, roundIdx));
-            const gamesInRound = roundGames[roundName];
+            const slots = regionMap[roundName] || [];
+            const expectedCount = slots.length;
 
             if (roundIdx > 0) {
                 const connector = document.createElement('div');
@@ -571,14 +589,13 @@
             const matchupsWrapper = document.createElement('div');
             matchupsWrapper.style.cssText = 'display:flex;flex-direction:column;justify-content:space-around;flex:1;gap:4px;';
 
-            for (let i = 0; i < expectedCount; i++) {
-                const game = gamesInRound[i] || null;
+            slots.forEach(game => {
                 const wrapper = document.createElement('div');
                 wrapper.innerHTML = bracketMatchupHTML(game);
                 const matchupEl = wrapper.firstElementChild;
                 if (game) matchupEl.addEventListener('click', () => openModal(game));
                 matchupsWrapper.appendChild(matchupEl);
-            }
+            });
 
             roundCol.appendChild(matchupsWrapper);
             tree.appendChild(roundCol);
@@ -589,7 +606,6 @@
     }
 
     async function renderBracket() {
-        // Only show loading spinner if we don't already have a bracket rendered
         if (bracketContent.children.length === 0 || bracketContent.querySelector('.mdc-empty-state')) {
             bracketContent.innerHTML = `
                 <div class="bracket-scroll-hint"><span class="material-icons-round">swipe</span> Scroll horizontally to see the full bracket</div>
@@ -601,53 +617,85 @@
 
         try {
             const allGames = await fetchAllBracketData();
+            const roundsOrder = ['1st Round', '2nd Round', 'Sweet 16', 'Elite 8', 'Final Four', 'Championship'];
+            const regionsList = ['East', 'West', 'South', 'Midwest', 'Final Four', 'National'];
+            
+            const regionMaps = {};
 
-            // Smart DOM update: If the bracket tree is already built, update just the matchups in-place
-            const hasExistingBracket = bracketContent.querySelector('.bracket-matchup');
-            if (hasExistingBracket) {
-                allGames.forEach(game => {
-                    const existingNode = bracketContent.querySelector(`[data-game-id="${game.id}"]`);
-                    if (existingNode) {
-                        const tempDiv = document.createElement('div');
-                        tempDiv.innerHTML = bracketMatchupHTML(game);
-                        const newNode = tempDiv.firstElementChild;
-                        if (existingNode.innerHTML !== newNode.innerHTML) {
-                            existingNode.innerHTML = newNode.innerHTML;
+            regionsList.forEach(reg => {
+                const regGames = allGames.filter(g => g.region === reg || (reg === 'Final Four' && g.round === 'Final Four') || (reg === 'National' && g.round === 'Championship'));
+                
+                const bracketMap = {
+                    '1st Round': new Array(8).fill(null),
+                    '2nd Round': new Array(4).fill(null),
+                    'Sweet 16': new Array(2).fill(null),
+                    'Elite 8': new Array(1).fill(null),
+                    'Final Four': new Array(2).fill(null),
+                    'Championship': new Array(1).fill(null)
+                };
+
+                const unsorted = [];
+                regGames.forEach(g => {
+                    if (bracketMap[g.round]) {
+                        const slot = getMatchupSortKey(g);
+                        if (slot < bracketMap[g.round].length && !bracketMap[g.round][slot]) {
+                            bracketMap[g.round][slot] = g;
+                        } else {
+                            unsorted.push(g);
                         }
                     }
                 });
                 
-                // Keep the champion trophy updated too
-                const chGame = allGames.find(g => g.round === 'Championship' || g.region === 'National');
-                const champTeamEl = bracketContent.querySelector('.bracket-champion__team');
-                if (champTeamEl) {
-                    const newChampText = (chGame && chGame.completed) 
-                        ? ((chGame.home?.isWinner ? chGame.home?.short : chGame.away?.short) || 'TBD') 
-                        : 'TBD';
-                    if (champTeamEl.textContent !== newChampText) {
-                        champTeamEl.textContent = newChampText;
-                    }
-                }
-                return; // Finished smart update, exit early
-            }
+                unsorted.forEach(g => {
+                    const slots = bracketMap[g.round];
+                    const openIdx = slots.indexOf(null);
+                    if (openIdx >= 0) slots[openIdx] = g;
+                });
+                
+                // Propagate
+                roundsOrder.forEach((rd, rdIdx) => {
+                    if (rdIdx >= roundsOrder.length - 1) return;
+                    const nextRd = roundsOrder[rdIdx + 1];
+                    const currentSlots = bracketMap[rd];
+                    const nextSlots = bracketMap[nextRd];
+                    if (!currentSlots || !nextSlots) return;
 
-            // Filter out First Four / play-in games
-            const FIRST_FOUR_DATES = ['20260317', '20260318'];
-            const bracketGames = allGames.filter(g => {
-                const dateStr = new Date(g.date).toLocaleDateString('en-CA', { timeZone: USER_TIMEZONE }).replace(/-/g, '');
-                return !FIRST_FOUR_DATES.includes(dateStr);
+                    currentSlots.forEach((game, gIdx) => {
+                        if (game && game.completed && (game.home?.isWinner || game.away?.isWinner)) {
+                            const winner = game.home?.isWinner ? game.home : game.away;
+                            const targetIdx = Math.floor(gIdx / 2);
+                            const isAwaySlot = (gIdx % 2 === 0);
+                            
+                            let targetGame = nextSlots[targetIdx];
+                            if (!targetGame) {
+                                targetGame = {
+                                    id: `ghost-${reg}-${nextRd}-${targetIdx}`,
+                                    round: nextRd,
+                                    region: reg,
+                                    status: 'TBD',
+                                    state: 'pre',
+                                    away: null,
+                                    home: null,
+                                    date: new Date().toISOString(),
+                                    notes: nextRd,
+                                    broadcast: ''
+                                };
+                                nextSlots[targetIdx] = targetGame;
+                            }
+
+                            if (isAwaySlot && (!targetGame.away || targetGame.away.name.includes('TBD'))) {
+                                targetGame.away = { ...winner, isWinner: false, score: '0' };
+                            } else if (!isAwaySlot && (!targetGame.home || targetGame.home.name.includes('TBD'))) {
+                                targetGame.home = { ...winner, isWinner: false, score: '0' };
+                            }
+                        }
+                    });
+                });
+
+                regionMaps[reg] = bracketMap;
             });
 
-            const regions = {};
-            bracketGames.forEach(g => {
-                if (g.region && g.region !== 'Final Four' && g.region !== 'National') {
-                    if (!regions[g.region]) regions[g.region] = [];
-                    regions[g.region].push(g);
-                }
-            });
-            const finalFour = bracketGames.filter(g => g.round === 'Final Four' || g.region === 'Final Four');
-            const championship = bracketGames.filter(g => g.round === 'Championship' || g.region === 'National');
-
+            // Standard DOM update - clearing for now to establish the new fixed structure
             bracketContent.innerHTML = '';
             const hint = document.createElement('div');
             hint.className = 'bracket-scroll-hint';
@@ -655,88 +703,86 @@
             bracketContent.appendChild(hint);
 
             ['East', 'West', 'South', 'Midwest'].forEach(rName => {
-                if (regions[rName]?.length > 0) bracketContent.appendChild(renderBracketRegion(rName, regions[rName]));
+                bracketContent.appendChild(renderBracketRegion(rName, regionMaps[rName]));
             });
 
-            // Final Four & Championship as a proper bracket tree
-            const ffSection = document.createElement('div');
-            ffSection.className = 'bracket-region';
-            ffSection.innerHTML = '<div class="bracket-region__title-wrap"><span class="bracket-region__title">Final Four & Championship</span></div>';
+            // Final Four & Championship
+            const ffMap = regionMaps['Final Four'];
+            const nMap = regionMaps['National'];
+            if (ffMap && nMap) {
+                const ffSection = document.createElement('div');
+                ffSection.className = 'bracket-region';
+                ffSection.innerHTML = '<div class="bracket-region__title-wrap"><span class="bracket-region__title">Final Four & Championship</span></div>';
+                const ffTree = document.createElement('div');
+                ffTree.className = 'bracket-tree';
+                ffTree.style.justifyContent = 'center';
 
-            const ffTree = document.createElement('div');
-            ffTree.className = 'bracket-tree';
-            ffTree.style.justifyContent = 'center';
+                // Final Four
+                const ffRound = document.createElement('div');
+                ffRound.className = 'bracket-round';
+                ffRound.innerHTML = '<div class="bracket-round-label">Final Four</div>';
+                const ffWrapper = document.createElement('div');
+                ffWrapper.style.cssText = 'display:flex;flex-direction:column;justify-content:space-around;flex:1;gap:4px;';
+                ffMap['Final Four'].forEach(game => {
+                    const w = document.createElement('div');
+                    w.innerHTML = bracketMatchupHTML(game);
+                    const el = w.firstElementChild;
+                    if (game) el.addEventListener('click', () => openModal(game));
+                    ffWrapper.appendChild(el);
+                });
+                ffRound.appendChild(ffWrapper);
+                ffTree.appendChild(ffRound);
 
-            // Final Four column (2 matchups)
-            const ffRound = document.createElement('div');
-            ffRound.className = 'bracket-round';
-            ffRound.innerHTML = '<div class="bracket-round-label">Final Four</div>';
-            const ffWrapper = document.createElement('div');
-            ffWrapper.style.cssText = 'display:flex;flex-direction:column;justify-content:space-around;flex:1;gap:4px;';
-            const ffSlots = Math.max(finalFour.length, 2);
-            for (let i = 0; i < ffSlots; i++) {
-                const game = finalFour[i] || null;
-                const w = document.createElement('div');
-                w.innerHTML = bracketMatchupHTML(game);
-                const el = w.firstElementChild;
-                if (game) el.addEventListener('click', () => openModal(game));
-                ffWrapper.appendChild(el);
+                const conn1 = document.createElement('div');
+                conn1.className = 'bracket-connector';
+                conn1.innerHTML = '<div class="bracket-connector-pair"></div>';
+                ffTree.appendChild(conn1);
+
+                // Champ
+                const chRound = document.createElement('div');
+                chRound.className = 'bracket-round';
+                chRound.innerHTML = '<div class="bracket-round-label">Championship</div>';
+                const chWrapper = document.createElement('div');
+                chWrapper.style.cssText = 'display:flex;flex-direction:column;justify-content:center;flex:1;gap:4px;';
+                nMap['Championship'].forEach(game => {
+                    const w = document.createElement('div');
+                    w.innerHTML = bracketMatchupHTML(game);
+                    const el = w.firstElementChild;
+                    if (game) el.addEventListener('click', () => openModal(game));
+                    chWrapper.appendChild(el);
+                });
+                chRound.appendChild(chWrapper);
+                ffTree.appendChild(chRound);
+
+                const conn2 = document.createElement('div');
+                conn2.className = 'bracket-connector';
+                conn2.style.width = '16px';
+                conn2.style.minWidth = '16px';
+                ffTree.appendChild(conn2);
+
+                const champCol = document.createElement('div');
+                champCol.className = 'bracket-round';
+                const finalGame = nMap['Championship'][0];
+                let champTeam = 'TBD';
+                if (finalGame && finalGame.completed) {
+                    champTeam = (finalGame.home?.isWinner ? finalGame.home?.short : finalGame.away?.short) || 'TBD';
+                }
+
+                champCol.innerHTML = `
+                    <div class="bracket-round-label">Champion</div>
+                    <div style="display:flex;flex-direction:column;justify-content:center;align-items:center;flex:1;gap:8px;">
+                        <div class="bracket-champion">
+                            <div class="bracket-champion__trophy">🏆</div>
+                            <div class="bracket-champion__label">National Champion</div>
+                            <div class="bracket-champion__team">${champTeam}</div>
+                        </div>
+                    </div>`;
+                ffTree.appendChild(champCol);
+
+                ffSection.appendChild(ffTree);
+                bracketContent.appendChild(ffSection);
             }
-            ffRound.appendChild(ffWrapper);
-            ffTree.appendChild(ffRound);
 
-            // Connector: Final Four → Championship
-            const conn1 = document.createElement('div');
-            conn1.className = 'bracket-connector';
-            conn1.innerHTML = '<div class="bracket-connector-pair"></div>';
-            ffTree.appendChild(conn1);
-
-            // Championship column (1 matchup)
-            const chRound = document.createElement('div');
-            chRound.className = 'bracket-round';
-            chRound.innerHTML = '<div class="bracket-round-label">Championship</div>';
-            const chWrapper = document.createElement('div');
-            chWrapper.style.cssText = 'display:flex;flex-direction:column;justify-content:center;flex:1;gap:4px;';
-            const chGame = championship[0] || null;
-            const chW = document.createElement('div');
-            chW.innerHTML = bracketMatchupHTML(chGame);
-            const chEl = chW.firstElementChild;
-            if (chGame) chEl.addEventListener('click', () => openModal(chGame));
-            chWrapper.appendChild(chEl);
-            chRound.appendChild(chWrapper);
-            ffTree.appendChild(chRound);
-
-            // Connector: Championship → Champion
-            const conn2 = document.createElement('div');
-            conn2.className = 'bracket-connector';
-            conn2.style.width = '16px';
-            conn2.style.minWidth = '16px';
-            ffTree.appendChild(conn2);
-
-            // Champion trophy slot
-            const champCol = document.createElement('div');
-            champCol.className = 'bracket-round';
-            champCol.innerHTML = `
-                <div class="bracket-round-label">Champion</div>
-                <div style="display:flex;flex-direction:column;justify-content:center;align-items:center;flex:1;gap:8px;">
-                    <div class="bracket-champion">
-                        <div class="bracket-champion__trophy">🏆</div>
-                        <div class="bracket-champion__label">National Champion</div>
-                        <div class="bracket-champion__team">${
-                            chGame && chGame.completed
-                                ? ((chGame.home?.isWinner ? chGame.home?.short : chGame.away?.short) || 'TBD')
-                                : 'TBD'
-                        }</div>
-                    </div>
-                </div>`;
-            ffTree.appendChild(champCol);
-
-            ffSection.appendChild(ffTree);
-            bracketContent.appendChild(ffSection);
-
-            if (Object.keys(regions).length === 0 && finalFour.length === 0 && championship.length === 0) {
-                bracketContent.innerHTML = '<div class="mdc-empty-state"><span class="material-icons-outlined mdc-empty-state__icon">account_tree</span><h2 class="mdc-empty-state__title">Bracket Unavailable</h2><p class="mdc-empty-state__body">Tournament bracket data is not yet available.</p></div>';
-            }
         } catch (err) {
             console.error('Bracket fetch failed:', err);
             bracketContent.innerHTML = '<div class="mdc-empty-state"><span class="material-icons-outlined mdc-empty-state__icon mdc-empty-state__icon--error">cloud_off</span><h2 class="mdc-empty-state__title">Failed to Load Bracket</h2><p class="mdc-empty-state__body">Could not fetch tournament data.</p></div>';
@@ -745,10 +791,17 @@
 
     // --- Filter / View ---
     function getFiltered() {
-        if (currentFilter === 'live') return allEvents.filter(g => g.state === 'in');
-        if (currentFilter === 'upcoming') return allEvents.filter(g => g.state === 'pre');
-        if (currentFilter === 'completed') return allEvents.filter(g => g.state === 'post');
-        return allEvents;
+        let filtered = [];
+        if (currentFilter === 'live') filtered = allEvents.filter(g => g.state === 'in');
+        else if (currentFilter === 'upcoming') filtered = allEvents.filter(g => g.state === 'pre');
+        else if (currentFilter === 'completed') filtered = allEvents.filter(g => g.state === 'post');
+        else filtered = [...allEvents];
+
+        // Status Sorting: Live -> Upcoming -> Final
+        return filtered.sort((a, b) => {
+            const order = { 'in': 0, 'pre': 1, 'post': 2 };
+            return (order[a.state] ?? 1) - (order[b.state] ?? 1);
+        });
     }
 
     function updateView() {
@@ -774,70 +827,113 @@
 
     // --- Render: Bets ---
     function renderBets() {
-        betsContainer.innerHTML = '';
         if (suggestedBetsCache.length === 0) {
             betsContainer.innerHTML = '<div class="mdc-empty-state"><span class="material-icons-outlined mdc-empty-state__icon">money_off</span><h2 class="mdc-empty-state__title">No Bets Available</h2><p class="mdc-empty-state__body">No suggested bets have been generated yet.</p></div>';
             return;
         }
 
-        const filteredBets = suggestedBetsCache.filter(bet => {
-            const game = allEvents.find(g => g.id === bet.gameId);
-            return game && (currentFilter === 'all' || game.state === (currentFilter === 'live' ? 'in' : currentFilter === 'upcoming' ? 'pre' : 'post'));
-        });
+        const getBetColor = (type) => {
+            const colors = {
+                'Sharp Money': '#FF5722',   // Deep Orange
+                'Upset Alert': '#2196F3',   // Blue
+                'Plus Money': '#673AB7',    // Deep Purple
+                'Coin Flip': '#4CAF50',     // Green
+                'Base Pick': '#607D8B'      // Grey
+            };
+            return colors[type] || 'var(--md-primary)';
+        };
 
-        if (filteredBets.length === 0) {
-            betsContainer.innerHTML = '<div class="mdc-empty-state"><span class="material-icons-outlined mdc-empty-state__icon">money_off</span><h2 class="mdc-empty-state__title">No Bets Match Filter</h2><p class="mdc-empty-state__body">Try changing your filter or date to see more suggested bets.</p></div>';
-            return;
+        // --- Persistent Architecture ---
+        let filterRow = betsContainer.querySelector('.mdc-bet-filters');
+        let grid = betsContainer.querySelector('.mdc-bets-grid');
+
+        if (!filterRow || !grid) {
+            betsContainer.innerHTML = '';
+            filterRow = document.createElement('div');
+            filterRow.className = 'mdc-bet-filters';
+            betsContainer.appendChild(filterRow);
+
+            grid = document.createElement('div');
+            grid.className = 'mdc-bets-grid mdc-card-grid'; // Reuse layout logic
+            betsContainer.appendChild(grid);
         }
 
-        const grid = document.createElement('div');
-        grid.className = 'mdc-card-grid';
+        // --- Standardized Filter Chips ---
+        const types = ['All', 'Sharp Money', 'Upset Alert', 'Plus Money', 'Coin Flip', 'Base Pick'];
+        filterRow.innerHTML = ''; 
+        types.forEach(type => {
+            const chip = document.createElement('button');
+            const isActive = (type === 'All' && currentBetTypeFilter === 'all') || (type === currentBetTypeFilter);
+            chip.className = `mdc-bet-filter-chip${isActive ? ' mdc-bet-filter-chip--active' : ''}`;
+            const label = document.createElement('span');
+            label.className = 'mdc-bet-filter-chip__label';
+            label.textContent = type;
+            if (isActive) {
+                const icon = document.createElement('span');
+                icon.className = 'material-icons-round mdc-bet-filter-chip__icon';
+                icon.textContent = 'check';
+                chip.appendChild(icon);
+            }
+            chip.appendChild(label);
+            const color = type === 'All' ? 'var(--md-primary)' : getBetColor(type);
+            chip.style.backgroundColor = color;
+            chip.style.color = '#fff';
+            chip.onclick = () => { currentBetTypeFilter = type === 'All' ? 'all' : type; renderBets(); };
+            filterRow.appendChild(chip);
+        });
 
-        filteredBets.forEach(bet => {
+        // --- Dynamic Filter & Sort ---
+        const filteredBets = suggestedBetsCache.filter(bet => {
+            const game = allEvents.find(g => g.id === bet.gameId);
+            const statusMatch = game && (currentFilter === 'all' || game.state === (currentFilter === 'live' ? 'in' : currentFilter === 'upcoming' ? 'pre' : 'post'));
+            const typeMatch = currentBetTypeFilter === 'all' || bet.type === currentBetTypeFilter;
+            return game && statusMatch && typeMatch;
+        });
+
+        // Strict Ranking / Heuristic Sort
+        filteredBets.sort((a, b) => b.score - a.score);
+
+        if (filteredBets.length === 0) {
+            grid.innerHTML = `<div class="mdc-empty-state" style="grid-column: 1 / -1;"><span class="material-icons-outlined mdc-empty-state__icon">filter_list</span><h2 class="mdc-empty-state__title">No Matches</h2><p class="mdc-empty-state__body">No ${currentBetTypeFilter === 'all' ? '' : currentBetTypeFilter} bets currently match your criteria.</p></div>`;
+            return;
+        } else {
+            const empty = grid.querySelector('.mdc-empty-state');
+            if (empty) grid.innerHTML = '';
+        }
+
+        // --- Surgical Live Update ---
+        const activeIds = new Set();
+        filteredBets.forEach((bet, index) => {
+            const betId = `bet-${bet.gameId}-${bet.type.replace(/\s+/g, '-')}`;
+            activeIds.add(betId);
             const game = allEvents.find(g => g.id === bet.gameId);
             if (!game) return;
 
+            // Generate Content Components
             let liveStatusHtml = '';
             if (game.state !== 'pre' && game.home && game.away) {
                 const homeScore = parseInt(game.home.score || '0');
                 const awayScore = parseInt(game.away.score || '0');
                 const margin = homeScore - awayScore; 
-                
                 const pLow = bet.pick.toLowerCase();
-                let betOnHome = (pLow.includes(game.home.short.toLowerCase()) || 
-                                (game.home.abbr && pLow.includes(game.home.abbr.toLowerCase())) || 
-                                pLow.includes(game.home.name.toLowerCase()));
-                                
+                let betOnHome = (pLow.includes(game.home.short.toLowerCase()) || (game.home.abbr && pLow.includes(game.home.abbr.toLowerCase())) || pLow.includes(game.home.name.toLowerCase()));
                 if (pLow.startsWith("opponent of")) betOnHome = !betOnHome;
-                
                 const pickSpreadMatch = bet.pick.match(/-?[\d.]+/);
                 const pickSpread = pickSpreadMatch ? parseFloat(pickSpreadMatch[0]) : 0;
-                
                 const isCovering = betOnHome ? (margin > -pickSpread) : (-margin > -pickSpread);
-                
                 const color = isCovering ? 'var(--accent-green)' : 'var(--accent-live)';
                 const icon = isCovering ? 'check_circle' : 'cancel';
                 const statusTxt = game.state === 'in' ? 'LIVE COVER:' : 'FINAL RESULT:';
-                
-                liveStatusHtml = `
-                    <div style="margin-top: 12px; padding: 10px; background: rgba(0,0,0,0.03); border-radius: 6px; font-size: 13px; font-weight: 600; display:flex; align-items:center; gap:6px;">
-                        <span class="material-icons-round" style="color: ${color}; font-size:16px;">${icon}</span>
-                        ${statusTxt} ${isCovering ? 'WINNING' : 'LOSING'}
-                        <span style="margin-left:auto; font-weight:400; color:var(--md-on-surface-variant)">Score: ${game.away.short} ${awayScore} - ${game.home.short} ${homeScore}</span>
-                    </div>
-                `;
+                liveStatusHtml = `<div style="margin-top: 12px; padding: 10px; background: rgba(0,0,0,0.03); border-radius: 6px; font-size: 13px; font-weight: 600; display:flex; align-items:center; gap:6px;"><span class="material-icons-round" style="color: ${color}; font-size:16px;">${icon}</span>${statusTxt} ${isCovering ? 'WINNING' : 'LOSING'}<span style="margin-left:auto; font-weight:400; color:var(--md-on-surface-variant)">Score: ${game.away.short} ${awayScore} - ${game.home.short} ${homeScore}</span></div>`;
             }
 
-            const card = document.createElement('div');
-            card.className = 'mdc-game-card';
-            card.style.padding = '16px';
-            card.innerHTML = `
+            const innerHTML = `
                 <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom: 12px;">
                     <div style="display:flex; align-items:center; gap:8px;">
-                        <span class="mdc-game-card__region">${bet.type}</span>
+                        <span class="mdc-game-card__region" style="background:${getBetColor(bet.type)}; color:#fff; text-shadow:0 1px 1px rgba(0,0,0,0.1)">${bet.type}</span>
                         <span style="font-size:11px; font-weight:600; color:var(--md-on-surface-variant); display:flex; align-items:center; gap:4px; opacity:0.8;">
                             <span class="material-icons-round" style="font-size:12px">schedule</span>
-                            ${game.statusDetail}
+                            ${bet.gameTime || 'TBD'}
                         </span>
                     </div>
                     <span class="mdc-chip--live" style="background:var(--md-surface-variant); border:none; color:var(--md-on-surface);"><span class="material-icons-round" style="font-size:12px">insights</span> ${bet.confidence} Conf</span>
@@ -850,9 +946,29 @@
                 </div>
                 ${liveStatusHtml}
             `;
-            grid.appendChild(card);
+
+            let card = document.getElementById(betId);
+            if (card) {
+                // Update only if changed
+                if (card.dataset.contentHash !== btoa(innerHTML).slice(0, 32)) {
+                    card.innerHTML = innerHTML;
+                    card.dataset.contentHash = btoa(innerHTML).slice(0, 32);
+                }
+            } else {
+                card = document.createElement('div');
+                card.id = betId;
+                card.className = 'mdc-game-card';
+                card.style.padding = '16px';
+                card.style.transition = 'all 0.3s ease';
+                card.innerHTML = innerHTML;
+                card.dataset.contentHash = btoa(innerHTML).slice(0, 32);
+                grid.appendChild(card);
+            }
+            card.style.order = index; // Ranking order
         });
-        betsContainer.appendChild(grid);
+
+        // Cleanup stale bets
+        grid.querySelectorAll('.mdc-game-card').forEach(c => { if (!activeIds.has(c.id)) c.remove(); });
     }
 
     // --- Modal ---
@@ -1032,22 +1148,46 @@
             allEvents = raw.map(ev => extractGame(ev, silent));
             
             // 3. Generate Suggested Bets dynamically by comparing Default (Opening) vs Adjusted (Live) Lines
+            // 3. Generate GLOBAL Suggested Bets by scanning the entire tournament field (R1/R2)
+            // This ensures the Top 10 Bets feed reflects total tournament value, not just today
+            // 3. Generate GLOBAL Suggested Bets by scanning the entire tournament field
+            // Use all defined tournament dates from First Four through the Championship
+            const poolPromises = TOURNAMENT_DATES.map(fetchGames);
+            const poolRes = await Promise.all(poolPromises);
+            const pool = poolRes.flat().map(ev => extractGame(ev, true));
+
             let freshBets = [];
-            allEvents.forEach(game => {
+            pool.forEach(game => {
+                if (game.state === 'post') return; // Skip completed matchups (already hit/missed)
                 const def = defaultOddsCache[game.id];
                 const adj = adjustedOddsCache[game.id];
                 if (!def) return; // Must have history
+
+                // Helper to resolve actual team names from abbreviations/strings
+                const getOpponent = (abbr) => {
+                    if (!abbr) return 'TBD';
+                    const a = abbr.toLowerCase().trim();
+                    const isH = (game.home?.abbr?.toLowerCase() === a || game.home?.short?.toLowerCase() === a || game.home?.name?.toLowerCase() === a);
+                    return isH ? (game.away?.short || 'Away Team') : (game.home?.short || 'Home Team');
+                };
+                const getTeam = (abbr) => {
+                    if (!abbr) return 'TBD';
+                    const a = abbr.toLowerCase().trim();
+                    const isH = (game.home?.abbr?.toLowerCase() === a || game.home?.short?.toLowerCase() === a || game.home?.name?.toLowerCase() === a);
+                    return isH ? (game.home?.short || abbr) : (game.away?.short || abbr);
+                };
 
                 // Factor 1: Include any custom specific predictions defined in odds.json
                 if (def.prediction && def.predReason) {
                     freshBets.push({
                         gameId: game.id,
-                        type: 'Base Model Pick',
+                        type: 'Base Pick',
                         pick: def.prediction,
                         odds: '-110',
                         reason: def.predReason,
                         confidence: 'Medium',
                         score: 40,
+                        gameTime: game.statusDetail,
                         lastUpdated: Date.now()
                     });
                 }
@@ -1060,25 +1200,29 @@
                         const spreadAmount = Math.abs(parseFloat(match[2]));
                         
                         if (spreadAmount > 15) {
+                            const dog = getOpponent(favTeam);
                             freshBets.push({
                                 gameId: game.id,
-                                type: 'Underdog Value Metric',
-                                pick: `Opponent of ${favTeam} +${spreadAmount}`,
+                                type: 'Upset Alert',
+                                pick: `${dog} +${spreadAmount}`,
                                 odds: '-110',
-                                reason: `Heavy favorites (${favTeam}) are historically unreliable at covering massive mathematically inflated double-digit spreads inside tournament pressure. Great value taking the points on the underdog.`,
+                                reason: `Heavy favorites (${favTeam}) are historically unreliable at covering massive mathematically inflated double-digit spreads. High value backing ${dog} with these points inside tourney pressure.`,
                                 confidence: 'High',
                                 score: 85,
+                                gameTime: game.statusDetail,
                                 lastUpdated: Date.now()
                             });
                         } else if (spreadAmount <= 3.5 && spreadAmount >= 1.0) {
+                            const favor = getTeam(favTeam);
                             freshBets.push({
                                 gameId: game.id,
-                                type: 'Coin-flip Favorite',
-                                pick: `${favTeam} -${spreadAmount}`,
+                                type: 'Coin Flip',
+                                pick: `${favor} -${spreadAmount}`,
                                 odds: '-110',
-                                reason: `In remarkably tight coin-flip spreads under 4 points, explicitly backing the slight mathematical favorite against standard public underdog narratives is a highly reliable winning strategy.`,
+                                reason: `In tight coin-flip spreads under 4 points, backing the slight mathematical favorite (${favor}) against standard public underdog narratives is a highly reliable winning strategy.`,
                                 confidence: 'Medium',
                                 score: 55,
+                                gameTime: game.statusDetail,
                                 lastUpdated: Date.now()
                             });
                         }
@@ -1097,14 +1241,16 @@
 
                         // Identify significant line movement (1.0 points or more)
                         if (Math.abs(lineDiff) >= 1.0) {
+                            const side = lineDiff < 0 ? getTeam(defMatch[1]) : getOpponent(defMatch[1]);
                             freshBets.push({
                                 gameId: game.id,
-                                type: 'Sharp Line Movement Alert',
-                                pick: lineDiff < 0 ? defMatch[1].trim() : `Opponent of ${defMatch[1].trim()}`,
+                                type: 'Sharp Money',
+                                pick: side,
                                 odds: 'N/A',
-                                reason: `Opening line was ${def.spread} but has moved heavily to ${adj.spread} (${Math.abs(lineDiff)} pt shift). Sharp cash is hammering this side, follow their lead.`,
+                                reason: `Opening line was ${def.spread} but has moved heavily to ${adj.spread} (${Math.abs(lineDiff)} pt shift). Sharp cash is hammering ${side}, follow their lead.`,
                                 confidence: Math.abs(lineDiff) >= 2.0 ? 'High' : 'Medium',
                                 score: Math.abs(lineDiff) >= 2.0 ? 95 : 75,
+                                gameTime: game.statusDetail,
                                 lastUpdated: Date.now()
                             });
                         }
@@ -1121,12 +1267,13 @@
                     if (!isNaN(num) && num >= 110 && num <= 400) {
                         freshBets.push({
                             gameId: game.id,
-                            type: 'Plus Money Value Play',
+                            type: 'Plus Money',
                             pick: `${team.short} (Moneyline)`,
                             odds: val.startsWith('+') ? val : `+${val}`,
                             reason: `Vegas is giving this dog a significant ${val} payout. Statistical projections indicate high risk but extreme potential value for users looking for a much larger payout than standard spreads.`,
                             confidence: 'Medium',
-                            score: 65, // Lower score than Sharp money but higher than base picks
+                            score: 65,
+                            gameTime: game.statusDetail,
                             lastUpdated: Date.now()
                         });
                     }
@@ -1135,9 +1282,23 @@
                 if (game.away) checkML(mlA, game.away);
             });
             
-            // Mathematically secure the absolute Top 10 Best bets sorted precisely by generated heuristic scoring
-            freshBets.sort((a,b) => b.score - a.score);
-            suggestedBetsCache = freshBets.slice(0, 10);
+            // Balance the candidate pool to ensure category diversity in your Top picks
+            const categories = {};
+            freshBets.forEach(b => { 
+                if (!categories[b.type]) categories[b.type] = [];
+                categories[b.type].push(b);
+            });
+            
+            // Pick top candidates from each category to ensure variety, then fill with best overall
+            let balanced = [];
+            Object.values(categories).forEach(list => {
+                list.sort((a,b) => b.score - a.score);
+                balanced.push(...list.slice(0, 4)); // Get up to 4 of each type
+            });
+            
+            balanced.sort((a,b) => b.score - a.score);
+            // Slice to Top 20 to give the user enough "Other Options" while maintaining elite quality
+            suggestedBetsCache = balanced.slice(0, 20);
             
             // Persist the generated suggested bets "database" into the browser as requested
             try { localStorage.setItem('suggested-bets.json', JSON.stringify(suggestedBetsCache)); } catch(e){}
@@ -1151,9 +1312,8 @@
             if (!silent) loadingContainer.style.display = 'none';
             renderStats();
             updateView();
-            lastUpdatedEl.textContent = `Updated ${currentTimeLocal()}`;
 
-            // Restart polling with potentially new interval
+            // Restart polling logic automatically
             startPolling();
         } catch (err) {
             console.error('Load failed:', err);
