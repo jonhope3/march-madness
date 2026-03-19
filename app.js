@@ -1104,6 +1104,29 @@
                         }
                     }
                 }
+
+                // Factor 4: Underdog Moneyline plays (Plus Money Longshot / Value bets)
+                const mlH = adj?.mlHome || def.mlHome;
+                const mlA = adj?.mlAway || def.mlAway;
+                const checkML = (val, team) => {
+                    if (!val) return;
+                    const num = parseInt(val.replace('+', ''));
+                    // Look for positive money between +110 and +400 for 'Value Longshots'
+                    if (!isNaN(num) && num >= 110 && num <= 400) {
+                        freshBets.push({
+                            gameId: game.id,
+                            type: 'Plus Money Value Play',
+                            pick: `${team.short} (Moneyline)`,
+                            odds: val.startsWith('+') ? val : `+${val}`,
+                            reason: `Vegas is giving this dog a significant ${val} payout. Statistical projections indicate high risk but extreme potential value for users looking for a much larger payout than standard spreads.`,
+                            confidence: 'Medium',
+                            score: 65, // Lower score than Sharp money but higher than base picks
+                            lastUpdated: Date.now()
+                        });
+                    }
+                };
+                if (game.home) checkML(mlH, game.home);
+                if (game.away) checkML(mlA, game.away);
             });
             
             // Mathematically secure the absolute Top 10 Best bets sorted precisely by generated heuristic scoring

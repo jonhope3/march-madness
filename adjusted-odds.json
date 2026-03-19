@@ -5,5 +5,26 @@
     "mlHome": "-150",
     "mlAway": "+130",
     "lastUpdated": 1710860000000
+  },
+  "401856484": {
+    "spread": "BYU -3.5",
+    "overUnder": "O/U 158.5",
+    "mlHome": "+135",
+    "mlAway": "-155",
+    "lastUpdated": 1773943948217
+  },
+  "401856487": {
+    "spread": "MSU -1.5",
+    "overUnder": "O/U 167.5",
+    "mlHome": "-110",
+    "mlAway": "+115",
+    "lastUpdated": 1773943948217
+  },
+  "401856488": {
+    "spread": "VAN -11.5",
+    "overUnder": "O/U 148.5",
+    "mlHome": "-450",
+    "mlAway": "+320",
+    "lastUpdated": 1773943948217
   }
 }
