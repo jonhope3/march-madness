@@ -833,7 +833,13 @@
             card.style.padding = '16px';
             card.innerHTML = `
                 <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom: 12px;">
-                    <span class="mdc-game-card__region">${bet.type}</span>
+                    <div style="display:flex; align-items:center; gap:8px;">
+                        <span class="mdc-game-card__region">${bet.type}</span>
+                        <span style="font-size:11px; font-weight:600; color:var(--md-on-surface-variant); display:flex; align-items:center; gap:4px; opacity:0.8;">
+                            <span class="material-icons-round" style="font-size:12px">schedule</span>
+                            ${game.statusDetail}
+                        </span>
+                    </div>
                     <span class="mdc-chip--live" style="background:var(--md-surface-variant); border:none; color:var(--md-on-surface);"><span class="material-icons-round" style="font-size:12px">insights</span> ${bet.confidence} Conf</span>
                 </div>
                 <div style="font-size: 18px; font-weight: 700; color: var(--md-on-surface); margin-bottom: 6px;">
