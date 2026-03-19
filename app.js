@@ -183,6 +183,12 @@
         };
     }
 
+    // --- Cache for Odds ---
+    const gameOddsCache = (() => {
+        try { return JSON.parse(localStorage.getItem('mm-odds-cache')) || {}; }
+        catch { return {}; }
+    })();
+
     function extractGame(ev) {
         const comp = ev.competitions?.[0] || {};
         const competitors = comp.competitors || [];
@@ -198,7 +204,7 @@
         const home = homeC ? extractTeam(homeC) : null;
         const away = awayC ? extractTeam(awayC) : null;
 
-        // Prediction from odds
+        // Prediction & Odds handling
         let prediction = '', predReason = '';
         if (odds.details) {
             const m = odds.details.match(/(\w+)\s*(-[\d.]+)/);
@@ -209,7 +215,20 @@
                     predReason = `Favored by ${Math.abs(parseFloat(m[2]))} pts`;
                 }
             }
+            // Add to cache so it doesn't disappear when the API stops sending odds during the game
+            gameOddsCache[ev.id] = {
+                spread: odds.details || '',
+                overUnder: odds.overUnder ? `O/U ${odds.overUnder}` : '',
+                mlHome: odds.moneyline?.home?.close?.odds || odds.moneyline?.home?.current?.odds || '',
+                mlAway: odds.moneyline?.away?.close?.odds || odds.moneyline?.away?.current?.odds || '',
+                prediction, predReason
+            };
+            // Persist to localStorage so a hard refresh mid-game doesn't wipe them
+            try { localStorage.setItem('mm-odds-cache', JSON.stringify(gameOddsCache)); } catch(e){}
         }
+
+        // Retrieve from cache if the API omitted it in this fetch
+        const cachedOdds = gameOddsCache[ev.id] || { spread: '', overUnder: '', mlHome: '', mlAway: '', prediction: '', predReason: '' };
 
         let region = '';
         const rMatch = notes.match(/(East|West|South|Midwest)/i);
@@ -234,11 +253,12 @@
             city: venue.address ? `${venue.address.city}, ${venue.address.state}` : '',
             broadcast, region, round, notes,
             home, away,
-            spread: odds.details || '',
-            overUnder: odds.overUnder ? `O/U ${odds.overUnder}` : '',
-            mlHome: odds.moneyline?.home?.close?.odds || '',
-            mlAway: odds.moneyline?.away?.close?.odds || '',
-            prediction, predReason,
+            spread: cachedOdds.spread,
+            overUnder: cachedOdds.overUnder,
+            mlHome: cachedOdds.mlHome,
+            mlAway: cachedOdds.mlAway,
+            prediction: cachedOdds.prediction,
+            predReason: cachedOdds.predReason,
             espnLink: ev.links?.find(l => l.rel?.includes('summary'))?.href || ''
         };
     }
