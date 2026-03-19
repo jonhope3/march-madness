@@ -551,21 +551,7 @@ body {
     transform: translateY(-2px);
 }
 
-.mdc-game-card--live {
-    border: 1.5px solid var(--md-primary);
-    box-shadow: 0 0 0 1px rgba(21, 101, 192, 0.15), var(--md-elevation-1);
-    animation: card-enter 0.4s cubic-bezier(0.2, 0, 0, 1) both, live-pulse 2.5s ease-in-out infinite;
-}
 
-@keyframes live-pulse {
-    0%, 100% { box-shadow: 0 0 0 1px rgba(21, 101, 192, 0.15), 0 0 8px rgba(21, 101, 192, 0.08), var(--md-elevation-1); }
-    50% { box-shadow: 0 0 0 2px rgba(21, 101, 192, 0.25), 0 0 16px rgba(21, 101, 192, 0.15), var(--md-elevation-2); }
-}
-
-.mdc-game-card--live:hover {
-    box-shadow: 0 0 0 2px rgba(21, 101, 192, 0.3), 0 0 20px rgba(21, 101, 192, 0.12), var(--md-elevation-3);
-    animation: none;
-}
 
 .mdc-game-card--final { opacity: 0.8; }
 .mdc-game-card--final:hover { opacity: 1; }

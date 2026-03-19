@@ -55,9 +55,11 @@
     const gamesContainer = $('games-container');
     const bracketContainer = $('bracket-container');
     const bracketContent = $('bracket-content');
+    const betsContainer = $('bets-container');
     const datePills = $('date-pills');
     const modalOverlay = $('modal-overlay');
     const modalContent = $('modal-content');
+    const modalTitle = $('modal-title');
     const lastUpdatedEl = $('last-updated');
     const liveBar = $('live-bar');
     const refreshCountdown = $('refresh-countdown');
@@ -182,11 +184,21 @@
             }))
         };
     }
-
-    // --- Cache for Odds ---
-    const gameOddsCache = (() => {
-        try { return JSON.parse(localStorage.getItem('mm-odds-cache')) || {}; }
+    // --- Caches ---
+    const defaultOddsCache = (() => {
+        try { 
+            const stored = JSON.parse(localStorage.getItem('default-odds.json'));
+            if (stored && Object.keys(stored).length > 0) return stored;
+        } catch { }
+        return {};
+    })();
+    const adjustedOddsCache = (() => {
+        try { return JSON.parse(localStorage.getItem('adjusted-odds.json')) || {}; }
         catch { return {}; }
+    })();
+    let suggestedBetsCache = (() => {
+        try { return JSON.parse(localStorage.getItem('suggested-bets.json')) || []; }
+        catch { return []; }
     })();
 
     function extractGame(ev) {
@@ -204,31 +216,32 @@
         const home = homeC ? extractTeam(homeC) : null;
         const away = awayC ? extractTeam(awayC) : null;
 
-        // Prediction & Odds handling
-        let prediction = '', predReason = '';
-        if (odds.details) {
-            const m = odds.details.match(/(\w+)\s*(-[\d.]+)/);
-            if (m) {
-                const fav = (home?.abbr === m[1]) ? home : (away?.abbr === m[1]) ? away : null;
-                if (fav) {
-                    prediction = `${fav.short} ${m[2]}`;
-                    predReason = `Favored by ${Math.abs(parseFloat(m[2]))} pts`;
-                }
+        // 2. Adjusted Odds (Only update if game hasn't started AND it's been > 30 mins)
+        if (sType.state === 'pre' && odds.details) {
+            const now = Date.now();
+            const lastUpdated = adjustedOddsCache[ev.id]?.lastUpdated || 0;
+            if (now - lastUpdated > 30 * 60 * 1000) {
+                adjustedOddsCache[ev.id] = {
+                    spread: odds.details || '',
+                    overUnder: odds.overUnder ? `O/U ${odds.overUnder}` : '',
+                    mlHome: odds.moneyline?.home?.close?.odds || odds.moneyline?.home?.current?.odds || '',
+                    mlAway: odds.moneyline?.away?.close?.odds || odds.moneyline?.away?.current?.odds || '',
+                    lastUpdated: now
+                };
+                try { localStorage.setItem('adjusted-odds.json', JSON.stringify(adjustedOddsCache)); } catch(e){}
             }
-            // Add to cache so it doesn't disappear when the API stops sending odds during the game
-            gameOddsCache[ev.id] = {
-                spread: odds.details || '',
-                overUnder: odds.overUnder ? `O/U ${odds.overUnder}` : '',
-                mlHome: odds.moneyline?.home?.close?.odds || odds.moneyline?.home?.current?.odds || '',
-                mlAway: odds.moneyline?.away?.close?.odds || odds.moneyline?.away?.current?.odds || '',
-                prediction, predReason
-            };
-            // Persist to localStorage so a hard refresh mid-game doesn't wipe them
-            try { localStorage.setItem('mm-odds-cache', JSON.stringify(gameOddsCache)); } catch(e){}
         }
 
-        // Retrieve from cache if the API omitted it in this fetch
-        const cachedOdds = gameOddsCache[ev.id] || { spread: '', overUnder: '', mlHome: '', mlAway: '', prediction: '', predReason: '' };
+        // 1. Default odds (History from odds.json)
+        const def = defaultOddsCache[ev.id] || {};
+        const adj = adjustedOddsCache[ev.id] || {};
+
+        // Display current odds if pre-game, otherwise lock to default odds (history) when live/finished
+        // We safely fallback to adj if def is perfectly missing out of network failure so live games never lose their spread!
+        const activeSpread = sType.state === 'pre' ? (adj.spread || def.spread || '') : (def.spread || adj.spread || '');
+        const activeOU = sType.state === 'pre' ? (adj.overUnder || def.overUnder || '') : (def.overUnder || adj.overUnder || '');
+        const activeMlHome = sType.state === 'pre' ? (adj.mlHome || def.mlHome || '') : (def.mlHome || adj.mlHome || '');
+        const activeMlAway = sType.state === 'pre' ? (adj.mlAway || def.mlAway || '') : (def.mlAway || adj.mlAway || '');
 
         let region = '';
         const rMatch = notes.match(/(East|West|South|Midwest)/i);
@@ -244,6 +257,20 @@
         else if (notes.includes('Final Four')) round = 'Final Four';
         else if (notes.includes('Championship')) round = 'Championship';
 
+        // Auto-generate Projected Winner from active spread if missing in default database
+        let prediction = def.prediction || '';
+        let predReason = def.predReason || '';
+        if (!prediction && activeSpread) {
+            const m = activeSpread.match(/([a-zA-Z\s]+?)\s*(-[\d.]+)/);
+            if (m) {
+                const fav = (home?.abbr === m[1]) ? home : (away?.abbr === m[1]) ? away : null;
+                if (fav) {
+                    prediction = `${fav.short} ${m[2]}`;
+                    predReason = `Favored by ${Math.abs(parseFloat(m[2]))} pts`;
+                }
+            }
+        }
+
         return {
             id: ev.id, date: ev.date, name: ev.name,
             state: sType.state || 'pre',
@@ -253,15 +280,15 @@
             city: venue.address ? `${venue.address.city}, ${venue.address.state}` : '',
             broadcast, region, round, notes,
             home, away,
-            spread: cachedOdds.spread,
-            overUnder: cachedOdds.overUnder,
-            mlHome: cachedOdds.mlHome,
-            mlAway: cachedOdds.mlAway,
-            prediction: cachedOdds.prediction,
-            predReason: cachedOdds.predReason,
+            spread: activeSpread,
+            overUnder: activeOU,
+            mlHome: activeMlHome,
+            mlAway: activeMlAway,
+            prediction: prediction,
+            predReason: predReason,
             espnLink: ev.links?.find(l => l.rel?.includes('summary'))?.href || ''
         };
-    }
+    }    
 
     // --- Render: Date Pills ---
     function renderDatePills() {
@@ -723,13 +750,92 @@
         if (currentView === 'cards') {
             gamesContainer.style.display = 'grid';
             bracketContainer.style.display = 'none';
+            betsContainer.style.display = 'none';
             renderCards();
-        } else {
+        } else if (currentView === 'bracket') {
             gamesContainer.style.display = 'none';
             bracketContainer.style.display = 'block';
+            betsContainer.style.display = 'none';
             noGamesContainer.style.display = 'none';
             renderBracket();
+        } else if (currentView === 'bets') {
+            gamesContainer.style.display = 'none';
+            bracketContainer.style.display = 'none';
+            betsContainer.style.display = 'block';
+            noGamesContainer.style.display = 'none';
+            renderBets();
         }
+    }
+
+    // --- Render: Bets ---
+    function renderBets() {
+        betsContainer.innerHTML = '';
+        if (suggestedBetsCache.length === 0) {
+            betsContainer.innerHTML = '<div class="mdc-empty-state"><span class="material-icons-outlined mdc-empty-state__icon">money_off</span><h2 class="mdc-empty-state__title">No Bets Available</h2><p class="mdc-empty-state__body">No suggested bets have been generated yet.</p></div>';
+            return;
+        }
+
+        const filteredBets = suggestedBetsCache.filter(bet => {
+            const game = allEvents.find(g => g.id === bet.gameId);
+            return game && (currentFilter === 'all' || game.state === (currentFilter === 'live' ? 'in' : currentFilter === 'upcoming' ? 'pre' : 'post'));
+        });
+
+        if (filteredBets.length === 0) {
+            betsContainer.innerHTML = '<div class="mdc-empty-state"><span class="material-icons-outlined mdc-empty-state__icon">money_off</span><h2 class="mdc-empty-state__title">No Bets Match Filter</h2><p class="mdc-empty-state__body">Try changing your filter or date to see more suggested bets.</p></div>';
+            return;
+        }
+
+        const grid = document.createElement('div');
+        grid.className = 'mdc-card-grid';
+
+        filteredBets.forEach(bet => {
+            const game = allEvents.find(g => g.id === bet.gameId);
+            if (!game) return;
+
+            let liveStatusHtml = '';
+            if (game.state !== 'pre' && game.home && game.away) {
+                // Calculate cover status if live or final
+                const homeScore = parseInt(game.home.score || '0');
+                const awayScore = parseInt(game.away.score || '0');
+                const margin = homeScore - awayScore; 
+                
+                const betOnHome = bet.pick.includes(game.home.short);
+                const pickSpread = parseFloat(bet.pick.split(' ').pop()); // e.g. -2.5 or +13.5
+                
+                const isCovering = betOnHome ? (margin > -pickSpread) : (-margin > -pickSpread);
+                
+                const color = isCovering ? 'var(--accent-green)' : 'var(--accent-live)';
+                const icon = isCovering ? 'check_circle' : 'cancel';
+                const statusTxt = game.state === 'in' ? 'LIVE COVER:' : 'FINAL RESULT:';
+                
+                liveStatusHtml = `
+                    <div style="margin-top: 12px; padding: 10px; background: rgba(0,0,0,0.03); border-radius: 6px; font-size: 13px; font-weight: 600; display:flex; align-items:center; gap:6px;">
+                        <span class="material-icons-round" style="color: ${color}; font-size:16px;">${icon}</span>
+                        ${statusTxt} ${isCovering ? 'WINNING' : 'LOSING'}
+                        <span style="margin-left:auto; font-weight:400; color:var(--md-on-surface-variant)">Score: ${game.away.short} ${awayScore} - ${game.home.short} ${homeScore}</span>
+                    </div>
+                `;
+            }
+
+            const card = document.createElement('div');
+            card.className = 'mdc-game-card';
+            card.style.padding = '16px';
+            card.innerHTML = `
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom: 12px;">
+                    <span class="mdc-game-card__region">${bet.type}</span>
+                    <span class="mdc-chip--live" style="background:var(--md-surface-variant); border:none; color:var(--md-on-surface);"><span class="material-icons-round" style="font-size:12px">insights</span> ${bet.confidence} Conf</span>
+                </div>
+                <div style="font-size: 18px; font-weight: 700; color: var(--md-on-surface); margin-bottom: 6px;">
+                    Pick: ${bet.pick} <span style="font-weight: 500; font-size: 14px; margin-left:8px; color: var(--accent-blue)">(${bet.odds})</span>
+                </div>
+                <div style="font-size: 13px; color: var(--md-on-surface-variant); line-height: 1.5;">
+                    ${bet.reason}
+                </div>
+                ${liveStatusHtml}
+            `;
+            grid.appendChild(card);
+        });
+        betsContainer.appendChild(grid);
     }
 
     // --- Modal ---
@@ -849,17 +955,19 @@
     }
 
     function setupViewToggle() {
-        $('view-cards').addEventListener('click', () => {
-            currentView = 'cards';
-            $('view-cards').classList.add('mdc-segmented-btn--selected');
-            $('view-bracket').classList.remove('mdc-segmented-btn--selected');
-            updateView();
-        });
-        $('view-bracket').addEventListener('click', () => {
-            currentView = 'bracket';
-            $('view-bracket').classList.add('mdc-segmented-btn--selected');
-            $('view-cards').classList.remove('mdc-segmented-btn--selected');
-            updateView();
+        const btns = {
+            'cards': $('view-cards'),
+            'bracket': $('view-bracket'),
+            'bets': $('view-bets')
+        };
+        
+        Object.keys(btns).forEach(key => {
+            btns[key].addEventListener('click', () => {
+                currentView = key;
+                Object.values(btns).forEach(b => b.classList.remove('mdc-segmented-btn--selected'));
+                btns[key].classList.add('mdc-segmented-btn--selected');
+                updateView();
+            });
         });
     }
 
@@ -895,7 +1003,56 @@
 
         try {
             const raw = await fetchGames(currentDate);
+
             allEvents = raw.map(extractGame);
+            
+            // 3. Generate Suggested Bets dynamically by comparing Default (Opening) vs Adjusted (Live) Lines
+            suggestedBetsCache = [];
+            allEvents.forEach(game => {
+                const def = defaultOddsCache[game.id];
+                const adj = adjustedOddsCache[game.id];
+                if (!def) return; // Must have history
+
+                // Factor 1: Include any custom specific predictions defined in odds.json
+                if (def.prediction && def.predReason) {
+                    suggestedBetsCache.push({
+                        gameId: game.id,
+                        type: 'Base Model Pick',
+                        pick: def.prediction,
+                        odds: '-110',
+                        reason: def.predReason,
+                        confidence: 'Medium'
+                    });
+                }
+
+                // Factor 2: Compare pre-game live adjustments to opening lines to find Sharp Money shifts
+                if (game.state === 'pre' && def.spread && adj?.spread && def.spread !== adj.spread) {
+                    const defMatch = def.spread.match(/([a-zA-Z\s]+?)\s*(-?[\d.]+)/);
+                    const adjMatch = adj.spread.match(/([a-zA-Z\s]+?)\s*(-?[\d.]+)/);
+                    
+                    if (defMatch && adjMatch && defMatch[1].trim() === adjMatch[1].trim()) {
+                        const defSpread = parseFloat(defMatch[2]);
+                        const adjSpread = parseFloat(adjMatch[2]);
+                        const lineDiff = adjSpread - defSpread;
+
+                        // Identify significant line movement (1.0 points or more)
+                        if (Math.abs(lineDiff) >= 1.0) {
+                            suggestedBetsCache.push({
+                                gameId: game.id,
+                                type: 'Sharp Line Movement Alert',
+                                pick: lineDiff < 0 ? defMatch[1].trim() : `Opponent of ${defMatch[1].trim()}`,
+                                odds: 'N/A',
+                                reason: `Opening line was ${def.spread} but has moved heavily to ${adj.spread} (${Math.abs(lineDiff)} pt shift). Sharp money is hammering this side.`,
+                                confidence: Math.abs(lineDiff) >= 2.0 ? 'High' : 'Medium',
+                                lastUpdated: Date.now()
+                            });
+                        }
+                    }
+                }
+            });
+            // Persist the generated suggested bets "database" into the browser as requested
+            try { localStorage.setItem('suggested-bets.json', JSON.stringify(suggestedBetsCache)); } catch(e){}
+
             bracketData = null; // invalidate bracket cache
             allEvents.sort((a, b) => {
                 const order = { 'in': 0, 'pre': 1, 'post': 2 };
@@ -929,7 +1086,7 @@
     }
 
     // Init
-    function init() {
+    async function init() {
         initTheme();
         currentDate = closestDate();
         renderDatePills();
@@ -937,6 +1094,18 @@
         setupViewToggle();
         setupDateNav();
         setupModal();
+
+        // Base Initial Load establishes Immutable History
+        try {
+            const res = await fetch('default-odds.json?t=' + Date.now());
+            if (res.ok) {
+                Object.assign(defaultOddsCache, await res.json());
+                try { localStorage.setItem('default-odds.json', JSON.stringify(defaultOddsCache)); } catch(e){}
+            }
+        } catch (e) {
+            console.log('No default odds network history found, relying on browser storage.');
+        }
+
         loadData();
     }
 
