@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>March Madness 2026 | Live NCAA Tournament Schedule & Predictions</title>
+    <meta name="description" content="Live March Madness 2026 NCAA Tournament schedule with teams, times, TV channels, odds and predictions. Updated in real-time.">
+    <meta name="color-scheme" content="light dark">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700;900&family=Roboto+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/icon?family=Material+Icons|Material+Icons+Outlined|Material+Icons+Round" rel="stylesheet">
+    <link rel="stylesheet" href="styles.css">
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🏀</text></svg>">
+</head>
+<body>
+    <!-- Top App Bar -->
+    <header class="mdc-top-app-bar" id="main-header">
+        <div class="mdc-top-app-bar__inner">
+            <div class="mdc-top-app-bar__start">
+                <span class="mdc-top-app-bar__icon">🏀</span>
+                <div class="mdc-top-app-bar__title-group">
+                    <h1 class="mdc-top-app-bar__title">March Madness</h1>
+                    <span class="mdc-top-app-bar__subtitle">2026 NCAA Tournament</span>
+                </div>
+            </div>
+            <div class="mdc-top-app-bar__end">
+                <div class="mdc-chip mdc-chip--live" id="live-indicator">
+                    <span class="mdc-chip__dot"></span>
+                    <span class="mdc-chip__label">Live</span>
+                </div>
+                <span class="mdc-top-app-bar__updated" id="last-updated">Loading...</span>
+                <button class="mdc-icon-button" id="theme-toggle" aria-label="Toggle dark mode">
+                    <span class="material-icons-round" id="theme-icon">dark_mode</span>
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <!-- Live Update Bar -->
+    <div class="mdc-live-bar" id="live-bar" style="display:none;">
+        <span class="material-icons-round mdc-live-bar__icon">sync</span>
+        <span class="mdc-live-bar__text">Auto-updating live scores</span>
+        <span class="mdc-live-bar__countdown" id="refresh-countdown"></span>
+    </div>
+
+    <!-- Stats Strip -->
+    <section class="mdc-stats-strip" id="stats-bar">
+        <div class="mdc-stats-strip__inner">
+            <div class="mdc-stat" id="stat-total-games">
+                <span class="mdc-stat__value">--</span>
+                <span class="mdc-stat__label">Games</span>
+            </div>
+            <div class="mdc-stat" id="stat-live-games">
+                <span class="mdc-stat__value">--</span>
+                <span class="mdc-stat__label">Live</span>
+            </div>
+            <div class="mdc-stat" id="stat-completed">
+                <span class="mdc-stat__value">--</span>
+                <span class="mdc-stat__label">Final</span>
+            </div>
+            <div class="mdc-stat" id="stat-upcoming">
+                <span class="mdc-stat__value">--</span>
+                <span class="mdc-stat__label">Upcoming</span>
+            </div>
+        </div>
+    </section>
+
+    <!-- Date Chip Scroll -->
+    <nav class="mdc-date-nav" id="date-nav">
+        <div class="mdc-date-nav__inner">
+            <button class="mdc-icon-button" id="prev-date" aria-label="Previous date">
+                <span class="material-icons-round">chevron_left</span>
+            </button>
+            <div class="mdc-date-chips" id="date-pills"></div>
+            <button class="mdc-icon-button" id="next-date" aria-label="Next date">
+                <span class="material-icons-round">chevron_right</span>
+            </button>
+        </div>
+    </nav>
+
+    <!-- Toolbar: Filters + View Toggle -->
+    <section class="mdc-toolbar" id="toolbar">
+        <div class="mdc-toolbar__inner">
+            <div class="mdc-toolbar__filters">
+                <button class="mdc-filter-chip mdc-filter-chip--selected" data-filter="all" id="filter-all">
+                    <span class="material-icons-outlined mdc-filter-chip__icon">sports_basketball</span>
+                    <span class="mdc-filter-chip__label">All</span>
+                </button>
+                <button class="mdc-filter-chip" data-filter="live" id="filter-live">
+                    <span class="material-icons-outlined mdc-filter-chip__icon">fiber_manual_record</span>
+                    <span class="mdc-filter-chip__label">Live</span>
+                </button>
+                <button class="mdc-filter-chip" data-filter="upcoming" id="filter-upcoming">
+                    <span class="material-icons-outlined mdc-filter-chip__icon">schedule</span>
+                    <span class="mdc-filter-chip__label">Upcoming</span>
+                </button>
+                <button class="mdc-filter-chip" data-filter="completed" id="filter-completed">
+                    <span class="material-icons-outlined mdc-filter-chip__icon">check_circle</span>
+                    <span class="mdc-filter-chip__label">Final</span>
+                </button>
+            </div>
+            <div class="mdc-toolbar__view-toggle">
+                <button class="mdc-segmented-btn mdc-segmented-btn--selected" id="view-cards" aria-label="Card view">
+                    <span class="material-icons-round">grid_view</span>
+                    <span class="mdc-segmented-btn__label">Cards</span>
+                </button>
+                <button class="mdc-segmented-btn" id="view-bracket" aria-label="Bracket view">
+                    <span class="material-icons-round">account_tree</span>
+                    <span class="mdc-segmented-btn__label">Bracket</span>
+                </button>
+            </div>
+        </div>
+    </section>
+
+    <!-- Loading State -->
+    <div class="mdc-loading" id="loading-container">
+        <div class="mdc-progress-circular">
+            <svg viewBox="0 0 48 48"><circle cx="24" cy="24" r="20"></circle></svg>
+        </div>
+        <p class="mdc-loading__text">Loading tournament data...</p>
+    </div>
+
+    <!-- Error State -->
+    <div class="mdc-empty-state" id="error-container" style="display:none;">
+        <span class="material-icons-outlined mdc-empty-state__icon mdc-empty-state__icon--error">cloud_off</span>
+        <h2 class="mdc-empty-state__title">Unable to Load Data</h2>
+        <p class="mdc-empty-state__body">There was an issue fetching tournament data.</p>
+        <button class="mdc-button mdc-button--filled" id="retry-btn" onclick="loadData()">
+            <span class="material-icons-round mdc-button__icon">refresh</span>
+            <span class="mdc-button__label">Try Again</span>
+        </button>
+    </div>
+
+    <!-- No Games State -->
+    <div class="mdc-empty-state" id="no-games-container" style="display:none;">
+        <span class="material-icons-outlined mdc-empty-state__icon">event_busy</span>
+        <h2 class="mdc-empty-state__title">No Games Scheduled</h2>
+        <p class="mdc-empty-state__body">There are no tournament games for this date. Try a different date above.</p>
+    </div>
+
+    <!-- Cards View -->
+    <main class="mdc-card-grid" id="games-container"></main>
+
+    <!-- Bracket View -->
+    <main class="mdc-bracket-container" id="bracket-container" style="display:none;">
+        <div class="mdc-bracket" id="bracket-content"></div>
+    </main>
+
+    <!-- Game Detail Modal (Bottom Sheet style) -->
+    <div class="mdc-scrim" id="modal-overlay">
+        <div class="mdc-dialog" id="game-modal">
+            <div class="mdc-dialog__header">
+                <span class="mdc-dialog__title" id="modal-title">Game Details</span>
+                <button class="mdc-icon-button" id="modal-close" aria-label="Close">
+                    <span class="material-icons-round">close</span>
+                </button>
+            </div>
+            <div class="mdc-dialog__content" id="modal-content"></div>
+        </div>
+    </div>
+
+    <!-- Footer -->
+    <footer class="mdc-footer" id="main-footer">
+        <p>Data from ESPN · Odds by DraftKings · Auto-updated during live games</p>
+        <p class="mdc-footer__disclaimer">For entertainment purposes only. All times CDT.</p>
+    </footer>
+
+    <script src="app.js"></script>
+</body>
+</html>
