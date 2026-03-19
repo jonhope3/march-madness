@@ -370,14 +370,40 @@
     // --- Render: Card Grid ---
     function renderCards() {
         const filtered = getFiltered();
-        gamesContainer.innerHTML = '';
-        if (filtered.length === 0) {
-            noGamesContainer.style.display = 'block';
-            gamesContainer.style.display = 'none';
+        
+        // Smart DOM update: Check if the exact same list of games is already rendered
+        const currentCards = Array.from(gamesContainer.children);
+        const isSameList = currentCards.length === filtered.length && 
+                           filtered.every((g, i) => currentCards[i]?.dataset.gameId === g.id);
+
+        if (isSameList) {
+            // Update in-place to prevent screen flicker and scroll jumping
+            filtered.forEach((g, i) => {
+                const tempDiv = renderGameCard(g, i);
+                const existingCard = currentCards[i];
+                // Only update innerHTML if it actually changed, to prevent image reload flashes
+                if (existingCard.innerHTML !== tempDiv.innerHTML) {
+                    existingCard.innerHTML = tempDiv.innerHTML;
+                    existingCard.className = tempDiv.className;
+                    existingCard.onclick = () => openModal(g);
+                }
+            });
         } else {
-            noGamesContainer.style.display = 'none';
-            gamesContainer.style.display = 'grid';
-            filtered.forEach((g, i) => gamesContainer.appendChild(renderGameCard(g, i)));
+            // Hard re-render (fallback for when games change, like switching filter tabs)
+            gamesContainer.innerHTML = '';
+            if (filtered.length === 0) {
+                noGamesContainer.style.display = 'block';
+                gamesContainer.style.display = 'none';
+            } else {
+                noGamesContainer.style.display = 'none';
+                gamesContainer.style.display = 'grid';
+                filtered.forEach((g, i) => {
+                    const card = renderGameCard(g, i);
+                    card.dataset.gameId = g.id;
+                    card.onclick = () => openModal(g);
+                    gamesContainer.appendChild(card);
+                });
+            }
         }
     }
 
@@ -511,15 +537,47 @@
     }
 
     async function renderBracket() {
-        bracketContent.innerHTML = `
-            <div class="bracket-scroll-hint"><span class="material-icons-round">swipe</span> Scroll horizontally to see the full bracket</div>
-            <div style="text-align:center;padding:40px;">
-                <div class="mdc-progress-circular" style="width:32px;height:32px;"><svg viewBox="0 0 48 48"><circle cx="24" cy="24" r="20"></circle></svg></div>
-                <p style="margin-top:12px;font-size:13px;color:var(--md-on-surface-variant);">Loading full bracket...</p>
-            </div>`;
+        // Only show loading spinner if we don't already have a bracket rendered
+        if (bracketContent.children.length === 0 || bracketContent.querySelector('.mdc-empty-state')) {
+            bracketContent.innerHTML = `
+                <div class="bracket-scroll-hint"><span class="material-icons-round">swipe</span> Scroll horizontally to see the full bracket</div>
+                <div style="text-align:center;padding:40px;">
+                    <div class="mdc-progress-circular" style="width:32px;height:32px;"><svg viewBox="0 0 48 48"><circle cx="24" cy="24" r="20"></circle></svg></div>
+                    <p style="margin-top:12px;font-size:13px;color:var(--md-on-surface-variant);">Loading full bracket...</p>
+                </div>`;
+        }
 
         try {
             const allGames = await fetchAllBracketData();
+
+            // Smart DOM update: If the bracket tree is already built, update just the matchups in-place
+            const hasExistingBracket = bracketContent.querySelector('.bracket-matchup');
+            if (hasExistingBracket) {
+                allGames.forEach(game => {
+                    const existingNode = bracketContent.querySelector(`[data-game-id="${game.id}"]`);
+                    if (existingNode) {
+                        const tempDiv = document.createElement('div');
+                        tempDiv.innerHTML = bracketMatchupHTML(game);
+                        const newNode = tempDiv.firstElementChild;
+                        if (existingNode.innerHTML !== newNode.innerHTML) {
+                            existingNode.innerHTML = newNode.innerHTML;
+                        }
+                    }
+                });
+                
+                // Keep the champion trophy updated too
+                const chGame = allGames.find(g => g.round === 'Championship' || g.region === 'National');
+                const champTeamEl = bracketContent.querySelector('.bracket-champion__team');
+                if (champTeamEl) {
+                    const newChampText = (chGame && chGame.completed) 
+                        ? ((chGame.home?.isWinner ? chGame.home?.short : chGame.away?.short) || 'TBD') 
+                        : 'TBD';
+                    if (champTeamEl.textContent !== newChampText) {
+                        champTeamEl.textContent = newChampText;
+                    }
+                }
+                return; // Finished smart update, exit early
+            }
 
             // Filter out First Four / play-in games
             const FIRST_FOUR_DATES = ['20260317', '20260318'];

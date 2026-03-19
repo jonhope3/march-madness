@@ -1276,3 +1276,16 @@ body {
     .mdc-segmented-btn { flex: 1; justify-content: center; }
     .mdc-segmented-btn__label { display: inline; }
 }
+
+/* 
+ * Dark Mode Logo Adjustments
+ * Transparent logos with dark features (black text/borders) become invisible on dark backgrounds.
+ * We force a soft gray background strictly in dark mode so they always remain readable.
+ */
+[data-theme="dark"] .mdc-team-row__logo,
+[data-theme="dark"] .bracket-team-logo,
+[data-theme="dark"] .modal-team-logo {
+    background-color: #E2E2E2;
+    padding: 3px;
+    border-radius: var(--md-shape-sm);
+}
