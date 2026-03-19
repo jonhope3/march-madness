@@ -1258,12 +1258,18 @@ body {
     }
 
     .mdc-dialog {
-        max-height: 92vh;
+        /* Let the modal stretch to fill all available space within the padded scrim container */
+        max-height: 100%;
         border-radius: var(--md-shape-xl) var(--md-shape-xl) 0 0;
         align-self: flex-end;
+        margin-top: auto; 
     }
 
-    .mdc-scrim { align-items: flex-end; padding: 0; }
+    .mdc-scrim { 
+        align-items: flex-end; 
+        /* Safe area inset perfectly hugs the iPhone notch/status bar with a minimum 24px gap */
+        padding: max(24px, env(safe-area-inset-top, 24px)) 0 0 0; 
+    }
     .modal-odds-grid { grid-template-columns: 1fr 1fr; }
 
     .mdc-segmented-btn__label { display: none; }
